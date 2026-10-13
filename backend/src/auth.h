@@ -186,5 +186,55 @@ CROW_ROUTE(app, "/api/auth/register").methods(crow::HTTPMethod::Post)
         res.body = nlohmann::json({{"authenticated", true}, {"user", u.to_json()}}).dump();
         return res;
     });
+ // POST /api/auth/logout
+    CROW_ROUTE(app, "/api/auth/logout").methods(crow::HTTPMethod::Post)
+    ([&auth](const crow::request& req) {
+        crow::response res;
+        res.set_header("Content-Type", "application/json");
+        std::string token = req.get_header_value("Authorization");
+        if (token.rfind("Bearer ", 0) == 0) token = token.substr(7);
+        auth.destroy_session(token);
+        res.code = 200;
+        res.body = nlohmann::json({{"success", true}}).dump();
+        return res;
+    });
+   CROW_ROUTE(app, "/api/worker/assessments/<int>/alert").methods(crow::HTTPMethod::Post)
+    ([&db](const crow::request& req, int assessment_id) {
+        crow::response res;
+        res.set_header("Content-Type", "application/json");
+
+        std::string custom_message = "";
+        try {
+            if (!req.body.empty()) {
+                auto body = nlohmann::json::parse(req.body);
+                custom_message = body.value("message", "");
+            }
+        } catch (...) {}
+
+        if (custom_message.empty()) {
+            custom_message = "HIGH RISK ALERT: ASHA Healthcare Worker has flagged critical risk for this patient.";
+        }
+
+        if (db.update_alert(assessment_id, custom_message)) {
+            std::cout << "[Notification Module] Alert dispatched for Assessment #" << assessment_id << std::endl;
+            res.code = 200;
+            res.body = nlohmann::json({
+                {"success", true},
+                {"module", "ASHA Worker: Send Notification"},
+                {"developer", "Yashwardhan Rohilla"},
+                {"message", "Emergency alert notification successfully dispatched to patient and health center."},
+                {"assessment_id", assessment_id}
+            }).dump();
+        } else {
+            res.code = 404;
+            res.body = nlohmann::json({{"error", "Assessment record not found."}}).dump();
+        }
+        return res;
+    });
+}
+
+}
+// asha worker send notification module completed
+
 
    
