@@ -119,3 +119,72 @@ CROW_ROUTE(app, "/api/auth/register").methods(crow::HTTPMethod::Post)
     });
 
 // gmail authentication completed
+ CROW_ROUTE(app, "/api/auth/login").methods(crow::HTTPMethod::Post)
+    ([&db, &auth](const crow::request& req) {
+        crow::response res;
+        res.set_header("Content-Type", "application/json");
+
+        try {
+            auto body = nlohmann::json::parse(req.body);
+            std::string email = body.value("email", "");
+            if (email.empty()) email = body.value("gmail", "");
+            if (email.empty()) email = body.value("username", "");
+            std::string password = body.value("password", "");
+
+            if (email.empty() || password.empty()) {
+                res.code = 400;
+                res.body = nlohmann::json({{"error", "Gmail and password are required."}}).dump();
+                return res;
+            }
+
+            User u;
+            if (!db.authenticate_user(email, password, u)) {
+                res.code = 401;
+                res.body = nlohmann::json({{"error", "Invalid Gmail address or password."}}).dump();
+                return res;
+            }
+
+            std::string token = auth.create_session(u);
+
+         
+            auto person = make_person(u);
+            std::cout << "[Auth Module] Login: " << person->full_name()
+                      << " -> " << person->role_description() << std::endl;
+
+            res.code = 200;
+            res.body = nlohmann::json({
+                {"success", true},
+                {"module", "User Authentication (Login)"},
+                {"developer", "Yashwardhan Rohilla"},
+                {"token", token},
+                {"user", u.to_json()}
+            }).dump();
+            return res;
+        } catch (const std::exception& e) {
+            res.code = 400;
+            res.body = nlohmann::json({{"error", std::string("Login error: ") + e.what()}}).dump();
+            return res;
+        }
+    });
+
+    // GET /api/auth/me
+    CROW_ROUTE(app, "/api/auth/me").methods(crow::HTTPMethod::Get)
+    ([&auth](const crow::request& req) {
+        crow::response res;
+        res.set_header("Content-Type", "application/json");
+        std::string token = req.get_header_value("Authorization");
+        if (token.rfind("Bearer ", 0) == 0) token = token.substr(7);
+
+        User u;
+        if (!auth.get_user(token, u)) {
+            res.code = 401;
+            res.body = nlohmann::json({{"error", "Not authenticated"}}).dump();
+            return res;
+        }
+
+        res.code = 200;
+        res.body = nlohmann::json({{"authenticated", true}, {"user", u.to_json()}}).dump();
+        return res;
+    });
+
+   
