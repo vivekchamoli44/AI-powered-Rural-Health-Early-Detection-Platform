@@ -274,8 +274,50 @@ namespace health{
                    nlohmann::json s_json = a.other_symptoms_to_watch;
                    nlohmann::json p_json = a.precautions;
                           
-                     
-                                          
+                   //Get current real date and time string
+                   auto now = std::chrono::system_clock::now();
+                   std::time_t now_time = std::chrono::system_clock::to_time_t(now);
+                   std::tm tm_buf;
+          #if defined(_WIN32)
+                   localtime_s(&tm_buf, &now_time);
+          #else
+                   localtime_r(&now_time, &tm_buf);
+          #endif
+                   std::stringstream time_ss;
+                   time_ss << std::put_time(&tm_buf, "%Y-%m-%d %H:%M:%S");
+                   std::string current_time_str = time_ss.str();
+
+                 if (a.created_at.empty())  {
+                     a.created_at = current_time_str;
+                 }
+            
+                 if (is_connected_)  {
+                      std::stringstream ss;
+                      ss << "INSERT INTO assessments (patient_id, patient_name, age,gender, phone, village_area, "
+                         << "bp_systolic, bp_diastolic, blood sugar, heart_rate, oxygen_level, temperature, "
+                         << "symptoms_text, medical_history, risk_score, risk_level, possible_chronic_diseases, "
+                         << "recommended_doctor, other_symptoms_to watch, precautions, immediate_actions, alert_sent, alert_message) VALUES ("
+                         << a.patient_id << ", '" << escape(a.patient_name) << "', " << a.age << ", '" << escape(a.gender) << "', "
+                         << "'" << escape(a.phone) << "', '" << escape(a.village_area) << "', " << a.bp_systolic << ", " << a.bp_diastolic << ", "
+                         << a.blood_sugar << ", " << a.heart_rate << ", " << a.oxygen_level << ", " << a.temperature << ", "
+                         << "'" << escape(a.symptoms_text) << "', '" << escape(a.medical_history) << "', " << a.risk_score << ", "
+                         << "'" << escape(a.risk_level) << "', '" << escape(d_json.dump()) << "', '" << escape(a.recommended_doctor) << "', "
+                         << "'" << escape(s_json.dump()) << "', '" << escape(p_json.dump()) << "', '" << escape(a.immediate_actions) << "', "
+                         << (a.alert_sent ? 1 : 0) << ", '" << escape(a.alert_message) << "');";
+                if (mysql_query(conn_, ss.str().c_str()) == 0) {
+                a.id = (int)mysql_insert_id(conn_);
+                return true;
+            }
+            return false;
+        } else {
+            a.id = next_assessment_id_++;
+            if (a.created_at.empty() || a.created_at == "Just now") {
+                a.created_at = current_time_str;
+            } 
+            memory_assessments_.push_back(a);
+            return true;
+        }
+    }
 
             
                      
