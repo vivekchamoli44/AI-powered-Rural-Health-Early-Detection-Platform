@@ -36,3 +36,38 @@ inline void register_dashboard_triage_routes(crow::SimpleApp& app, DatabaseManag
         }).dump();
         return res;
     });
+ CROW_ROUTE(app, "/api/worker/assessments/<int>/contact").methods(crow::HTTPMethod::Post)
+    ([&db](const crow::request& req, int assessment_id){
+        crow::response res;
+        res.set_header("Content-Type", "application/json");
+
+        std::string notes = "";
+        try {
+            if (!req.body.empty()) {
+                auto body = nlohmann::json::parse(req.body);
+                notes = body.value("notes", "");
+            }
+        } catch (...) {}
+
+        if (notes.empty()) {
+            notes = "ASHA health worker contacted patient for clinical follow up.";
+        }
+
+        if (db.log_contact(assessment_id, notes)) {
+            res.code = 200;
+            res.body = nlohmann::json({
+                {"success", true},
+                {"module", "ASHA Worker: Contact Patient & Outreach"},
+                {"developer", "Nandini"},
+                {"message", "Patient contact recorded successfully."},
+                {"assessment_id", assessment_id}
+            }).dump();
+        } else {
+            res.code = 404;
+            res.body = nlohmann::json({{"error", "Assessment record not found."}}).dump();
+        }
+        return res;
+    });
+}
+
+}
