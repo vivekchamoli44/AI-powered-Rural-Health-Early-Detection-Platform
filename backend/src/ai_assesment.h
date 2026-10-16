@@ -94,7 +94,6 @@ private:
         if (bResults) {
             bResults = WinHttpReceiveResponse(hRequest, NULL);
         }
-
         if (bResults) {
             DWORD dwSize = 0;
             DWORD dwDownloaded = 0;
@@ -202,7 +201,6 @@ private:
         cout << "[Vivek - AI Module] Successfully parsed live Gemini AI diagnosis (model: " << model << ")! Risk: " << res.risk_score << std::endl;
         return res;
     }
-
 public:
     GeminiAIEngine(const std::string& explicit_key = "") {
         if (!explicit_key.empty()) {
@@ -250,3 +248,63 @@ public:
         throw std::runtime_error("All free-tier Gemini models are currently unavailable. Last error: " + last_error);
     }
 };
+// Route Registration 
+inline void register_ai_assessment_routes(crow::SimpleApp& app, DatabaseManager& db, GeminiAIEngine& ai) {
+    // POST /api/assessments - Start New Assessment
+    CROW_ROUTE(app, "/api/assessments").methods(crow::HTTPMethod::Post)
+    ([&db, &ai](const crow::request& req) {
+        crow::response res;
+        res.set_header("Content-Type", "application/json");
+        Assessment a;
+        try {
+            auto body = nlohmann::json::parse(req.body);
+            a.patient_id = body.value("patient_id", 2);
+            a.patient_name = body.value("patient_name", "Patient");
+            a.age = body.value("age", 45);
+            a.gender = body.value("gender", "Not Specified");
+            a.phone = body.value("phone", "+91 98765 00000");
+            a.village_area = body.value("village_area", "Community Area");
+            a.bp_systolic = body.value("bp_systolic", 0);
+            a.bp_diastolic = body.value("bp_diastolic", 0);
+            a.blood_sugar = body.value("blood_sugar", 0);
+            a.heart_rate = body.value("heart_rate", 0);
+            a.oxygen_level = body.value("oxygen_level", 0);
+            a.temperature = body.value("temperature", 0.0);
+            a.symptoms_text = body.value("symptoms_text", "");
+            a.medical_history = body.value("medical_history", "");
+        } catch (const std::exception& e) {
+            res.code = 400;
+            res.body = nlohmann::json({{"error", std::string("Invalid request payload: ") + e.what()}}).dump();
+            return res;
+        }
+        AIResult result;
+        try {
+            result = ai.assess_patient(a);
+        } catch (const std::exception& e) {
+            res.code = 503;
+            res.body = nlohmann::json({
+                {"success", false},
+                {"module", "AI Integration with Gemini & Patient Assessment"},
+                {"error", std::string("Gemini AI assessment unavailable: ") + e.what()}
+            }).dump();
+            return res;
+        }
+        a.risk_score = result.risk_score;
+        a.risk_level = result.risk_level;
+        a.possible_chronic_diseases = result.possible_chronic_diseases;
+        a.recommended_doctor = result.recommended_doctor;
+        a.other_symptoms_to_watch = result.other_symptoms_to_watch;
+        a.precautions = result.precautions;
+        a.immediate_actions = result.immediate_actions;
+        db.save_assessment(a);
+        res.code = 201;
+        res.body = nlohmann::json({
+            {"success", true},
+            {"module", "AI Integration with Gemini & Patient Assessment"},
+            {"developer", "Vivek Chamoli"},
+            {"assessment", a.to_json()}
+        }).dump();
+        return res;
+    });
+}
+}
