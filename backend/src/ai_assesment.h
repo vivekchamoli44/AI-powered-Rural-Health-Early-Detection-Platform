@@ -202,3 +202,51 @@ private:
         cout << "[Vivek - AI Module] Successfully parsed live Gemini AI diagnosis (model: " << model << ")! Risk: " << res.risk_score << std::endl;
         return res;
     }
+
+public:
+    GeminiAIEngine(const std::string& explicit_key = "") {
+        if (!explicit_key.empty()) {
+            api_key_ = explicit_key;
+        } else {
+            api_key_ = load_env_var("GEMINI_API_KEY");
+        }
+    }
+    bool has_api_key() const { return !api_key_.empty() && api_key_.length() > 10; }
+    AIResult assess_patient(const Assessment& req) {
+        if (!has_api_key()) {
+            throw std::runtime_error("Gemini API key is not configured. Set GEMINI_API_KEY in .env or config.json.");
+        }
+        static const std::vector<std::string> models = {
+            "gemini-flash-lite-latest",
+            "gemini-2.5-flash-lite",
+            "gemini-2.5-flash"
+        };
+        const int max_attempts_per_model = 2;
+        string last_error = "Unknown error.";
+        for (const auto& model : models) {
+            for (int attempt = 1; attempt <= max_attempts_per_model; ++attempt) {
+                try {
+                    cout << "[Vivek - AI Module] Sending assessment request to Google Gemini API (model: "
+                              << model << ", attempt " << attempt << "/" << max_attempts_per_model << ")..." << std::endl;
+                    return request_gemini_assessment(req, model);
+                } catch (const GeminiQuotaExhaustedError& e) {
+                    last_error = e.what();
+                    cout<< last_error << std::endl;
+                    break;
+                } catch (const GeminiOverloadedError& e) {
+                    last_error = e.what();
+                    cout<< last_error << std::endl;
+                    if (attempt < max_attempts_per_model) {
+                        Sleep(800 * attempt);
+                    }
+                } catch (const std::exception& e) {
+                    last_error = e.what();
+                    cout << "[Vivek - AI Module] " << last_error << std::endl;
+                    break;
+                }
+            }
+            cout<< model << "' unavailable, trying next free-tier Gemini model..." << std::endl;
+        }
+        throw std::runtime_error("All free-tier Gemini models are currently unavailable. Last error: " + last_error);
+    }
+};
