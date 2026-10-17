@@ -1,3 +1,5 @@
+
+
 let allPatients = [];
 let activePatient = null;
 
@@ -18,8 +20,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 });
-
-// 1. Load ASHA Worker Patients
 async function loadTriage() {
     const tbody = document.getElementById('triage-tbody');
     if (!tbody) return;
@@ -56,6 +56,7 @@ async function loadTriage() {
         tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #ef4444; padding: 20px;">Error loading patients: ' + err.message + '</td></tr>';
     }
 }
+
 function renderTriageTable(patients) {
     const tbody = document.getElementById('triage-tbody');
     if (!tbody) return;
@@ -71,8 +72,6 @@ function renderTriageTable(patients) {
         if (item.risk_level === 'Critical') badgeClass = 'badge-critical';
         else if (item.risk_level === 'High') badgeClass = 'badge-high';
         else if (item.risk_level === 'Moderate') badgeClass = 'badge-moderate';
-
-        // Format concise symptoms without large text block
         const symptomsArr = (item.symptoms_text || '')
             .split(',')
             .map(function (s) { return s.trim(); })
@@ -120,8 +119,6 @@ function renderTriageTable(patients) {
                 </div>
             </td>
         `;
-
-        // Alert button handler
         const alertBtn = tr.querySelector('.action-alert-btn');
         if (alertBtn && !item.alert_sent) {
             alertBtn.addEventListener('click', function () {
@@ -130,13 +127,9 @@ function renderTriageTable(patients) {
                 }
             });
         }
-
-        // Contact button handler
         tr.querySelector('.action-contact-btn').addEventListener('click', function () {
             openContact(item);
         });
-
-        // Report button handler
         tr.querySelector('.action-view-btn').addEventListener('click', function () {
             if (window.AiAssessmentModule) {
                 window.AiAssessmentModule.renderReport(item, true);
@@ -146,8 +139,6 @@ function renderTriageTable(patients) {
         tbody.appendChild(tr);
     });
 }
-
-// 3. Search & Filter
 function applyFilter() {
     const query = (document.getElementById('triage-search')?.value || '').toLowerCase();
     const filter = (document.getElementById('triage-filter')?.value || 'ALL').toUpperCase();
@@ -161,8 +152,6 @@ function applyFilter() {
 
     renderTriageTable(filtered);
 }
-
-// 4. Open Patient Contact Modal (Shows only Name, Contact No, and Location)
 function openContact(item) {
     activePatient = item;
     const modal = document.getElementById('contact-modal');
@@ -178,8 +167,6 @@ function openContact(item) {
 
     modal.classList.add('active');
 }
-
-// Export module functions
 window.DashboardTriageModule = {
     loadTriage: loadTriage
 };
