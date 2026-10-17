@@ -99,3 +99,78 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 });
+
+async function handleAuthSubmit(e) {
+    e.preventDefault();
+    const submitBtn = document.getElementById('auth-submit');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Please wait...';
+
+    const email = document.getElementById('email').value.trim().toLowerCase();
+    const password = document.getElementById('password').value.trim();
+
+    if (!email || !email.includes('@')) {
+        showToast('Please enter a valid Gmail address', 'error');
+        submitBtn.disabled = false;
+        submitBtn.textContent = isRegisterMode ? 'Sign Up' : 'Sign In';
+        return;
+    }
+
+    try {
+        if (isRegisterMode) {
+            
+            const payload = {
+                email: email,
+                username: email,
+                password: password,
+                role: currentRole,
+                full_name: document.getElementById('reg_name').value.trim() || email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+                phone: document.getElementById('reg_phone').value.trim(),
+                village_area: document.getElementById('reg_area').value.trim(),
+                age: parseInt(document.getElementById('reg_age').value) || 30,
+                gender: document.getElementById('reg_gender').value || 'Other'
+            };
+
+            const response = await fetch('/api/auth/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Registration failed');
+
+            saveSession(data.token, data.user);
+            showToast('Account registered successfully!', 'success');
+            openDashboard(data.user.role);
+
+        } else {
+            
+            const payload = {
+                email: email,
+                username: email,
+                password: password
+            };
+
+            const response = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Login failed');
+
+            saveSession(data.token, data.user);
+            showToast('Welcome back, ' + data.user.full_name + '!', 'success');
+            openDashboard(data.user.role);
+        }
+
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = isRegisterMode ? 'Sign Up' : 'Sign In';
+    }
+}
+
