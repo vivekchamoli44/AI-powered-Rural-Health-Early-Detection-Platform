@@ -381,7 +381,58 @@ namespace health{
         return list;
     }
                         
+std::vector<Assessment> get_all_assessments_sorted() {
+        std::lock_guard<std::mutex> lock(db_mutex_);
+        std::vector<Assessment> list;
+        if (is_connected_) {
+            std::string q = "SELECT id, patient_id, patient_name, age, gender, phone, village_area, "
+                            "bp_systolic, bp_diastolic, blood_sugar, heart_rate, oxygen_level, temperature, "
+                            "symptoms_text, medical_history, risk_score, risk_level, possible_chronic_diseases, "
+                            "recommended_doctor, other_symptoms_to_watch, precautions, immediate_actions, "
+                            "alert_sent, alert_sent_at, alert_message, asha_contacted, asha_notes, created_at "
+                            "FROM assessments ORDER BY risk_score DESC, id DESC;";
+            if (mysql_query(conn_, q.c_str()) == 0) {
+                MYSQL_RES* res = mysql_store_result(conn_);
+                if (res) {
+                    MYSQL_ROW row;
+                    while ((row = mysql_fetch_row(res))) {
+                        Assessment a;
+                        a.id = std::atoi(row[0]);
+                        a.patient_id = std::atoi(row[1]);
+                        a.patient_name = row[2] ? row[2] : "";
+                        a.age = row[3] ? std::atoi(row[3]) : 0;
+                        a.gender = row[4] ? row[4] : "";
+                        a.phone = row[5] ? row[5] : "";
+                        a.village_area = row[6] ? row[6] : "";
+                        a.bp_systolic = row[7] ? std::atoi(row[7]) : 120;
+                        a.bp_diastolic = row[8] ? std::atoi(row[8]) : 80;
+                        a.blood_sugar = row[9] ? std::atoi(row[9]) : 95;
+                        a.heart_rate = row[10] ? std::atoi(row[10]) : 72;
+                        a.oxygen_level = row[11] ? std::atoi(row[11]) : 98;
+                        a.temperature = row[12] ? std::atof(row[12]) : 98.6;
+                        a.symptoms_text = row[13] ? row[13] : "";
+                        a.medical_history = row[14] ? row[14] : "";
+                        a.risk_score = row[15] ? std::atoi(row[15]) : 0;
+                        a.risk_level = row[16] ? row[16] : "";
 
+                        try { if (row[17]) a.possible_chronic_diseases = nlohmann::json::parse(row[17]).get<std::vector<std::string>>(); } catch (...) {}
+                        a.recommended_doctor = row[18] ? row[18] : "";
+                        try { if (row[19]) a.other_symptoms_to_watch = nlohmann::json::parse(row[19]).get<std::vector<std::string>>(); } catch (...) {}
+                        try { if (row[20]) a.precautions = nlohmann::json::parse(row[20]).get<std::vector<std::string>>(); } catch (...) {}
+
+                        a.immediate_actions = row[21] ? row[21] : "";
+                        a.alert_sent = row[22] ? (std::atoi(row[22]) != 0) : false;
+                        a.alert_sent_at = row[23] ? row[23] : "";
+                        a.alert_message = row[24] ? row[24] : "";
+                        a.asha_contacted = row[25] ? (std::atoi(row[25]) != 0) : false;
+                        a.asha_notes = row[26] ? row[26] : "";
+                        a.created_at = row[27] ? row[27] : "";
+                        list.push_back(a);
+                    }
+                    mysql_free_result(res);
+                }
+            }
+        } else {
 
                          
 
