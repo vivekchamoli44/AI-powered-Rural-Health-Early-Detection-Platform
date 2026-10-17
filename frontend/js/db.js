@@ -78,3 +78,74 @@ async function loadHistory(patientId, isSilent) {
         container.innerHTML = '<p style="color: #ef4444; padding: 10px;">Failed to load history: ' + err.message + '</p>';
     }
 }
+// 2. Render ASHA Worker Alerts in Patient Dashboard Sidebar
+function renderAlertsSidebar(list) {
+    const alertsContainer = document.getElementById('patient-alerts-list');
+    const badgeEl = document.getElementById('patient-alert-badge');
+    if (!alertsContainer) return;
+
+    const alerts = (list || []).filter(function (item) {
+        return item.alert_sent;
+    });
+
+    if (badgeEl) {
+        if (alerts.length > 0) {
+            badgeEl.className = 'badge badge-critical';
+            badgeEl.textContent = alerts.length + (alerts.length === 1 ? ' Alert' : ' Alerts');
+        } else {
+            badgeEl.className = 'badge badge-low';
+            badgeEl.textContent = '0 Alerts';
+        }
+    }
+
+    if (alerts.length === 0) {
+        alertsContainer.innerHTML = `
+            <div style="text-align: center; padding: 18px 12px; background: #f0fdf4; border: 1px dashed #86efac; border-radius: 8px; color: #166534; font-size: 12px;">
+                <div style="font-size: 24px; margin-bottom: 6px;">✅</div>
+                <strong>No Active Alerts</strong>
+                <p style="margin: 4px 0 0; color: #15803d; font-size: 11px;">Your ASHA community health worker has not dispatched emergency alerts.</p>
+            </div>
+        `;
+        return;
+    }
+
+    alertsContainer.innerHTML = '';
+    alerts.forEach(function (item) {
+        const alertCard = document.createElement('div');
+        alertCard.className = 'alert-item-card';
+
+        const alertTime = item.alert_sent_at || item.created_at || 'Recently';
+        const alertMsg = item.alert_message || 'HIGH RISK ALERT: ASHA Healthcare Worker has flagged critical risk for this patient.';
+
+        alertCard.innerHTML = `
+            <div class="alert-item-header">
+                <span>🚨 ASHA DISPATCHED</span>
+                <span>${alertTime}</span>
+            </div>
+            <div class="alert-item-msg">
+                ${alertMsg}
+            </div>
+            <div style="font-size: 11.5px; color: #991b1b; margin-bottom: 6px;">
+                Specialist: <strong>${item.recommended_doctor || 'General Physician'}</strong>
+            </div>
+            <div class="alert-item-footer">
+                <span>Assessment #${item.id} (${item.risk_score}/100 Risk)</span>
+                <button type="button" class="btn btn-danger btn-sm view-alert-report-btn" style="padding: 3px 8px; font-size: 11px;">View Report</button>
+            </div>
+        `;
+
+        alertCard.querySelector('.view-alert-report-btn').addEventListener('click', function () {
+            if (window.AiAssessmentModule) {
+                window.AiAssessmentModule.renderReport(item, true);
+            }
+        });
+
+        alertsContainer.appendChild(alertCard);
+    });
+}
+
+// Export module functions
+window.DbHistoryModule = {
+    loadHistory: loadHistory,
+    renderAlertsSidebar: renderAlertsSidebar
+};
