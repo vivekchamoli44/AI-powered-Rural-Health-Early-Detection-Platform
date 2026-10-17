@@ -173,4 +173,121 @@ async function handleAuthSubmit(e) {
         submitBtn.textContent = isRegisterMode ? 'Sign Up' : 'Sign In';
     }
 }
+function saveSession(token, user) {
+    localStorage.setItem('auth_token', token);
+    localStorage.setItem('auth_user', JSON.stringify(user));
+}
 
+
+function getCurrentUser() {
+    try {
+        return JSON.parse(localStorage.getItem('auth_user')) || null;
+    } catch (e) {
+        return null;
+    }
+}
+
+
+function authHeaders() {
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '')
+    };
+}
+
+
+function handleSessionExpired(response) {
+    if (response.status !== 401) return false;
+    localStorage.removeItem('auth_user');
+    localStorage.removeItem('auth_token');
+    showToast('Session expired. Please sign in again.', 'error');
+    setTimeout(function () { window.location.href = 'index.html'; }, 1200);
+    return true;
+}
+
+
+function openDashboard(role) {
+    window.location.href = dashboardPageFor(role);
+}
+
+
+function setupNavUser(user) {
+    const navInfo = document.getElementById('nav-user-info');
+    if (navInfo) navInfo.style.display = 'flex';
+
+    const nameEl = document.getElementById('nav-user-name');
+    if (nameEl && user) {
+        let displayName = user.full_name || '';
+       
+        if (!displayName || displayName.includes('@')) {
+            let raw = (displayName || user.email || user.username || 'User').split('@')[0];
+            displayName = raw.replace(/[._-]+/g, ' ').replace(/\b\w/g, function (c) {
+                return c.toUpperCase();
+            });
+        }
+        nameEl.textContent = displayName;
+    }
+}
+
+
+function showToast(message, type) {
+    const toast = document.createElement('div');
+    toast.style.position = 'fixed';
+    toast.style.bottom = '20px';
+    toast.style.right = '20px';
+    toast.style.backgroundColor = (type === 'error') ? '#ef4444' : '#10b981';
+    toast.style.color = '#ffffff';
+    toast.style.padding = '10px 18px';
+    toast.style.borderRadius = '6px';
+    toast.style.fontWeight = 'bold';
+    toast.style.fontSize = '14px';
+    toast.style.zIndex = '9999';
+    toast.textContent = message;
+
+    document.body.appendChild(toast);
+    setTimeout(function () {
+        toast.remove();
+    }, 3000);
+}
+
+
+async function sendNotification(assessmentId, patientName, btnElement) {
+    if (!confirm('Send emergency alert to ' + patientName + '?')) {
+        return;
+    }
+
+    btnElement.disabled = true;
+    btnElement.textContent = 'Sending...';
+
+    try {
+        const response = await fetch('/api/worker/assessments/' + assessmentId + '/alert', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({
+                message: 'EMERGENCY ALERT: High risk flagged for ' + patientName + '. Please consult doctor immediately.'
+            })
+        });
+
+        if (handleSessionExpired(response)) return;
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to dispatch alert');
+
+        showToast('Emergency alert sent successfully!', 'success');
+        if (window.DashboardTriageModule) {
+            window.DashboardTriageModule.loadTriage();
+        }
+
+    } catch (err) {
+        showToast(err.message, 'error');
+        btnElement.disabled = false;
+        btnElement.textContent = '🚨 Send Alert';
+    }
+}
+
+
+window.AuthNotificationModule = {
+    notify: showToast,
+    sendNotification: sendNotification,
+    authHeaders: authHeaders,
+    handleSessionExpired: handleSessionExpired
+};
