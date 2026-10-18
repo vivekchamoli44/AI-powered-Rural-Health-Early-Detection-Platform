@@ -97,3 +97,60 @@ struct Assessment {
         };
     }
 };
+struct AIResult {
+    int risk_score = 15;
+    std::string risk_level = "Low";
+    std::vector<std::string> possible_chronic_diseases;
+    std::string recommended_doctor = "General Physician";
+    std::vector<std::string> other_symptoms_to_watch;
+    std::vector<std::string> precautions;
+    std::string immediate_actions;
+};
+class Person {
+protected:
+    std::string full_name_;
+    std::string village_area_;
+
+public:
+    Person(const std::string& full_name, const std::string& village_area)
+        : full_name_(full_name), village_area_(village_area) {}
+
+    virtual ~Person() = default;
+
+    const std::string& full_name() const { return full_name_; }
+
+
+    virtual std::string role_description() const {
+        return "Community member";
+    }
+};
+
+class Patient : public Person {
+public:
+    Patient(const std::string& full_name, const std::string& village_area)
+        : Person(full_name, village_area) {}
+
+    std::string role_description() const override {
+        return "Patient - tracks personal health assessments and ASHA alerts";
+    }
+};
+
+class AshaWorker : public Person {
+public:
+    AshaWorker(const std::string& full_name, const std::string& village_area)
+        : Person(full_name, village_area) {}
+
+    std::string role_description() const override {
+        return "ASHA Worker - triages community members by risk and dispatches alerts";
+    }
+};
+
+
+inline std::unique_ptr<Person> make_person(const User& u) {
+    if (u.role == "asha_worker") {
+        return std::make_unique<AshaWorker>(u.full_name, u.village_area);
+    }
+    return std::make_unique<Patient>(u.full_name, u.village_area);
+}
+
+}
