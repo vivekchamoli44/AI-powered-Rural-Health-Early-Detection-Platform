@@ -103,3 +103,132 @@ async function handleAssessmentSubmit(e) {
         submitBtn.textContent = '⚡ Run AI Diagnostic Assessment';
     }
 }
+// 2. Render Assessment Report on screen or in modal
+function renderReport(a, openModal) {
+    if (!a) return;
+    // Determine badge color
+    let badgeColor = '#10b981';
+    let badgeClass = 'badge-low';
+    if (a.risk_level === 'Critical') {
+        badgeColor = '#ef4444';
+        badgeClass = 'badge-critical';
+    } else if (a.risk_level === 'High') {
+        badgeColor = '#f97316';
+        badgeClass = 'badge-high';
+    } else if (a.risk_level === 'Moderate') {
+        badgeColor = '#eab308';
+        badgeClass = 'badge-moderate';
+    }
+    // A. Populate In-Page Report Card
+    const inPageBox = document.getElementById('ai-report-display');
+    if (inPageBox) {
+        const scoreEl = document.getElementById('diag-score');
+        const circleEl = document.getElementById('diag-circle');
+        const badgeEl = document.getElementById('diag-badge');
+        const docEl = document.getElementById('diag-doctor');
+        const actEl = document.getElementById('diag-actions');
+        if (scoreEl) scoreEl.textContent = a.risk_score;
+        if (circleEl) circleEl.style.background = badgeColor;
+        if (badgeEl) {
+            badgeEl.className = 'badge ' + badgeClass;
+            badgeEl.textContent = a.risk_level + ' Risk';
+        }
+        if (docEl) docEl.textContent = a.recommended_doctor || 'General Physician';
+        if (actEl) actEl.textContent = a.immediate_actions || 'Consult physician.';
+        // Populate chronic diseases
+        const diseasesBox = document.getElementById('diag-diseases');
+        if (diseasesBox) {
+            diseasesBox.innerHTML = '';
+            (a.possible_chronic_diseases || []).forEach(function (d) {
+                const span = document.createElement('span');
+                span.className = 'pill-tag';
+                span.textContent = d;
+                diseasesBox.appendChild(span);
+            });
+        }
+        // Populate warning symptoms
+        const symList = document.getElementById('diag-other-sym');
+        if (symList) {
+            symList.innerHTML = '';
+            (a.other_symptoms_to_watch || []).forEach(function (s) {
+                const li = document.createElement('li');
+                li.textContent = s;
+                symList.appendChild(li);
+            });
+        }
+        // Populate precautions
+        const precList = document.getElementById('diag-precautions');
+        if (precList) {
+            precList.innerHTML = '';
+            (a.precautions || []).forEach(function (p) {
+                const li = document.createElement('li');
+                li.textContent = p;
+                precList.appendChild(li);
+            });
+        }
+        inPageBox.classList.add('active');
+        // patient.html is a dedicated page now, so this box is always visible when present.
+        inPageBox.scrollIntoView({ behavior: 'smooth' });
+    }
+    // B. Populate Report Modal (for ASHA workers and history view)
+    const modal = document.getElementById('report-modal');
+    if (modal) {
+        const mScore = document.getElementById('modal-diag-score');
+        const mCircle = document.getElementById('modal-diag-circle');
+        const mBadge = document.getElementById('modal-diag-badge');
+        const mPatient = document.getElementById('modal-report-patient-name');
+        const mMeta = document.getElementById('modal-report-meta');
+        const mTime = document.getElementById('modal-report-timestamp');
+        const mDoctor = document.getElementById('modal-diag-doctor');
+        const mActions = document.getElementById('modal-diag-actions');
+        if (mScore) mScore.textContent = a.risk_score;
+        if (mCircle) mCircle.style.background = badgeColor;
+        if (mBadge) {
+            mBadge.className = 'badge ' + badgeClass;
+            mBadge.textContent = a.risk_level + ' Risk';
+        }
+        if (mPatient) mPatient.textContent = (a.patient_name || 'Patient') + ' - Clinical Assessment Report';
+        if (mMeta) mMeta.textContent = 'Age: ' + (a.age || '--') + ' | Area: ' + (a.village_area || '--') + ' | Phone: ' + (a.phone || '--');
+        if (mTime) mTime.textContent = a.created_at || 'Just now';
+        if (mDoctor) mDoctor.textContent = a.recommended_doctor || 'General Physician';
+        if (mActions) mActions.textContent = a.immediate_actions || 'Consult physician.';
+        // Modal diseases
+        const mDiseases = document.getElementById('modal-diag-diseases');
+        if (mDiseases) {
+            mDiseases.innerHTML = '';
+            (a.possible_chronic_diseases || []).forEach(function (d) {
+                const span = document.createElement('span');
+                span.className = 'pill-tag';
+                span.textContent = d;
+                mDiseases.appendChild(span);
+            });
+        }
+        // Modal warning symptoms
+        const mSym = document.getElementById('modal-diag-other-sym');
+        if (mSym) {
+            mSym.innerHTML = '';
+            (a.other_symptoms_to_watch || []).forEach(function (s) {
+                const li = document.createElement('li');
+                li.textContent = s;
+                mSym.appendChild(li);
+            });
+        }
+        // Modal precautions
+        const mPrec = document.getElementById('modal-diag-precautions');
+        if (mPrec) {
+            mPrec.innerHTML = '';
+            (a.precautions || []).forEach(function (p) {
+                const li = document.createElement('li');
+                li.textContent = p;
+                mPrec.appendChild(li);
+            });
+        }
+        if (openModal) {
+            modal.classList.add('active');
+        }
+    }
+}
+// Export module functions
+window.AiAssessmentModule = {
+    renderReport: renderReport
+};
