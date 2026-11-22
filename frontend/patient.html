@@ -6,7 +6,8 @@
     <title>Medico - Patient Dashboard</title>
     <link rel="stylesheet" href="/css/style.css">
 </head>
-<body> 
+<body>
+    <!-- Top Navbar -->
     <header class="navbar">
         <a href="/" class="brand">
             <div class="brand-icon">⚕</div>
@@ -23,13 +24,17 @@
             </div>
         </div>
     </header>
- 
+
+    <!-- PATIENT DASHBOARD VIEW -->
     <div id="view-patient" class="container patient-container">
- 
+        <!-- Hero Action Bar -->
         <div class="hero-banner">
             <div>
-                <h2>Patient Health Dashboard</h2>
-                <p>Early Chronic Disease Detection & Personalized Risk Evaluation</p>
+                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <h2 id="patient-welcome-heading" style="margin: 0;">Patient Health Dashboard</h2>
+                    <span id="patient-id-badge" class="badge" style="background: rgba(255, 255, 255, 0.22); color: #ffffff; border: 1.5px solid rgba(255, 255, 255, 0.5); font-size: 0.95rem; padding: 4px 12px; border-radius: 20px; font-weight: 700;">Patient ID: #--</span>
+                </div>
+                <p id="patient-sub-details" style="margin-top: 6px; opacity: 0.95;">Early Chronic Disease Detection & Personalized Risk Evaluation</p>
             </div>
             <div>
                 <button id="open-assess-modal" class="btn btn-primary" style="background: white; color: var(--primary-dark); font-size: 0.95rem; padding: 0.75rem 1.25rem;">
@@ -37,9 +42,10 @@
                 </button>
             </div>
         </div>
-
-        <div class="patient-grid-layout"> 
-            <div class="patient-main-content"> 
+        <div class="patient-grid-layout">
+            <!-- Left Main Content Column -->
+            <div class="patient-main-content">
+                <!-- AI Diagnostic Report Display -->
                 <div id="ai-report-display" class="ai-result-box">
                     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 1rem; margin-bottom: 1rem;">
                         <div style="display: flex; align-items: center; gap: 1rem;">
@@ -52,11 +58,12 @@
                                     <h3 style="font-size: 1.3rem; font-weight: 700;">AI Chronic Risk Assessment</h3>
                                     <span id="diag-badge" class="badge">--</span>
                                 </div>
-                                <p style="font-size: 0.85rem; color: var(--text-muted);">Model Engine: Google Gemini Clinical AI & Biomarker Calibrations</p>
+                                <p style="font-size: 0.85rem; color: var(--text-muted);">Model Engine: Google Gemini Clinical AI &bull; Grounded on ICMR &amp; WHO Guidelines</p>
                             </div>
                         </div>
                     </div>
- 
+
+                    <!-- Doctor Callout -->
                     <div class="doctor-callout">
                         <div style="font-size: 2rem;">🩺</div>
                         <div>
@@ -64,7 +71,6 @@
                             <div style="color: #047857; font-size: 0.85rem;">Clinical consultation recommended for targeted diagnostic testing and care plan.</div>
                         </div>
                     </div>
-
                     <div class="grid-2">
                         <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem;">
                             <h4 style="font-size: 0.92rem; font-weight: 700; margin-bottom: 0.5rem;">🔍 Possible Chronic Diseases</h4>
@@ -88,13 +94,94 @@
                             <p id="diag-actions" style="font-size: 0.88rem; color: #7f1d1d; font-weight: 500;">--</p>
                         </div>
                     </div>
-                </div> 
+                </div>
+
+                <!-- Book Diagnostic Lab Test Section (DSA 1: Interval Tree Slot Scheduling) -->
+                <section class="card" style="border-top: 4px solid var(--primary);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+                        <div>
+                            <h3 style="font-size: 1.25rem; font-weight: 800; margin: 0; color: var(--text-main);">🧪 Book Diagnostic Lab Test</h3>
+                            <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 2px;">
+                                Conflict-free time slot booking verified via <strong style="color: var(--primary);">Augmented Interval Tree (O(log N))</strong>
+                            </p>
+                        </div>
+                        <span id="lab-fasting-tag" class="badge badge-high" style="display: none;"></span>
+                    </div>
+
+                    <!-- Step 1: Select Test, Date & Timing (Clean 3-Dropdown Grid) -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+                        <div>
+                            <label style="font-size: 0.85rem; font-weight: 700; color: var(--text-main); display: block; margin-bottom: 6px;">
+                                1. Select Diagnostic Test
+                            </label>
+                            <select id="lab-test-select" class="form-control" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border); font-size: 0.9rem; background: #fff;">
+                                <option value="">Loading lab catalog...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.85rem; font-weight: 700; color: var(--text-main); display: block; margin-bottom: 6px;">
+                                2. Preferred Date
+                            </label>
+                            <input type="date" id="lab-date-select" class="form-control" style="width: 100%; padding: 9px 12px; border-radius: 8px; border: 1.5px solid var(--border); font-size: 0.9rem; background: #fff;" />
+                        </div>
+                        <div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <label style="font-size: 0.85rem; font-weight: 700; color: var(--text-main); margin: 0;">
+                                    3. Select Timing Slot
+                                </label>
+                                <small style="font-size: 0.75rem; color: #16a34a; font-weight: 600;">O(log N) Conflict-Free</small>
+                            </div>
+                            <select id="lab-slot-select" class="form-control" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border); font-size: 0.9rem; background: #fff;">
+                                <option value="">-- Choose Date to View Slots --</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Preparation Note Box -->
+                    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 14px; margin-bottom: 1.25rem; font-size: 0.84rem; color: #166534;">
+                        ℹ️ <strong style="color: #14532d;">Preparation Instructions:</strong> <span id="lab-prep-note">Select a diagnostic test above to see medical preparation details.</span>
+                    </div>
+
+                    <!-- Step 4: Summary & Confirm Button -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; flex-wrap: wrap; gap: 0.75rem;">
+                        <div id="lab-booking-summary" style="font-size: 0.88rem; color: var(--text-muted); font-weight: 500; background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; flex: 1; min-width: 260px;">
+                            Select a diagnostic test, date, and timing slot above.
+                        </div>
+                        <button type="button" id="btn-confirm-lab-book" class="btn btn-primary" style="padding: 11px 26px; font-weight: 700; font-size: 0.95rem; cursor: pointer;">
+                            Confirm Lab Appointment
+                        </button>
+                    </div>
+
+                    <!-- My Lab Bookings Sub-Table -->
+                    <div style="margin-top: 1.5rem; border-top: 1px solid var(--border); padding-top: 1rem;">
+                        <h4 style="font-size: 1rem; font-weight: 700; margin-bottom: 0.75rem;">📅 My Scheduled Lab Tests</h4>
+                        <div class="triage-table-wrapper">
+                            <table class="triage-table" style="font-size: 0.88rem;">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Test Details</th>
+                                        <th>Date & Slot</th>
+                                        <th>Status</th>
+                                        <th>Booked On</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="patient-lab-bookings-tbody">
+                                    <tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 12px;">Loading bookings...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Previous Assessments Section -->
                 <section class="card">
                     <div class="card-title">📋 Previous Health Assessments</div>
-                    <p class="card-desc">Historical timeline of your screenings, reported symptoms, and physician recommendations.</p>
                     <div id="history-timeline-box"></div>
                 </section>
-            </div> 
+            </div>
+
+            <!-- Right Sidebar: ASHA Worker Alerts -->
             <aside class="patient-sidebar">
                 <div class="card alert-sidebar-card">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -104,9 +191,7 @@
                         </div>
                         <span id="patient-alert-badge" class="badge badge-low">0 Alerts</span>
                     </div>
-                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;">
-                        Emergency clinical notifications & referral instructions sent by your community healthcare worker.
-                    </p>
+                    
                     <div id="patient-alerts-list" class="alerts-stream">
                         <div style="text-align: center; padding: 18px 12px; background: #f0fdf4; border: 1px dashed #86efac; border-radius: 8px; color: #166534; font-size: 12px;">
                             <div style="font-size: 24px; margin-bottom: 6px;">✅</div>
@@ -114,7 +199,9 @@
                             <p style="margin: 4px 0 0; color: #15803d; font-size: 11px;">Your ASHA community health worker has not dispatched emergency alerts.</p>
                         </div>
                     </div>
-                </div> 
+                </div>
+
+                <!-- Emergency Helplines -->
                 <div class="card" style="background: #f8fafc; border: 1px solid var(--border);">
                     <h4 style="font-size: 0.88rem; font-weight: 700; margin-bottom: 8px; color: var(--text-main);">🚨 Emergency Numbers</h4>
                     <div style="font-size: 0.84rem; color: var(--text-muted); line-height: 1.7;">
@@ -125,7 +212,9 @@
                 </div>
             </aside>
         </div>
-    </div> 
+    </div>
+
+    <!-- Start New Assessment Modal -->
     <div id="assess-modal" class="modal-overlay">
         <div class="modal-card">
             <button type="button" class="modal-close" id="close-assess-modal" onclick="document.getElementById('assess-modal').classList.remove('active')">&times;</button>
@@ -134,7 +223,8 @@
                 <p style="font-size: 0.85rem; color: var(--text-muted);">AI Clinical Risk Evaluation</p>
             </div>
 
-            <form id="assessment-form" autocomplete="off"> 
+            <form id="assessment-form" autocomplete="off">
+                <!-- Symptoms Checkboxes -->
                 <div class="question-category">
                     <div class="category-title">
                         <span>❤️</span>
@@ -217,7 +307,6 @@
                         </label>
                     </div>
                 </div>
-
                 <div class="question-category">
                     <div class="category-title">
                         <span>🧫</span>
@@ -353,11 +442,14 @@
                 </div>
             </form>
         </div>
-    </div> 
+    </div>
+
+    <!-- AI Diagnostic Assessment Report Modal -->
     <div id="report-modal" class="modal-overlay">
         <div class="modal-card" style="max-width: 780px;">
             <button type="button" class="modal-close" onclick="document.getElementById('report-modal').classList.remove('active')">&times;</button>
- 
+
+            <!-- Modal Header with Date & Time Stamp -->
             <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--border); padding-bottom: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem;">
                 <div style="display: flex; align-items: center; gap: 1rem;">
                     <div id="modal-diag-circle" class="score-circle">
@@ -377,7 +469,9 @@
                     <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Assessment Date & Time</div>
                     <div id="modal-report-timestamp" style="font-size: 0.92rem; font-weight: 700; color: var(--primary-dark);">--</div>
                 </div>
-            </div> 
+            </div>
+
+            <!-- Doctor Callout -->
             <div class="doctor-callout" style="margin-bottom: 1.25rem;">
                 <div style="font-size: 2rem;">👨‍⚕️</div>
                 <div>
@@ -416,9 +510,15 @@
                 </button>
             </div>
         </div>
-    </div> 
-    <script src="/js/auth_notification.js"></script> 
-    <script src="/js/ai_assessment.js"></script> 
+    </div>
+
+    <!-- Login, Sign Up & ASHA Notification Module (Yashwardhan Rohilla) — nav user info + logout + page guard -->
+    <script src="/js/auth_notification.js"></script>
+    <!-- AI Integration with Gemini & Patient: Start New Assessment (Vivek Chamoli) -->
+    <script src="/js/ai_assessment.js"></script>
+    <!-- Database and Testing & Patient: Show Previous Assessment (Anjali) -->
     <script src="/js/db_history.js"></script>
+    <!-- Diagnostic Lab Test Booking Module (Interval Tree + Max-Heap DSA) -->
+    <script src="/js/lab_booking.js?v=20261123_4"></script>
 </body>
 </html>
