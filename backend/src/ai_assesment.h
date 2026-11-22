@@ -1,4 +1,4 @@
-#include <string>
+#pragma once
 #include <vector>
 #include <iostream>
 #include <fstream>
@@ -8,34 +8,46 @@
 #include "crow_all.h"
 #include "models.h"
 #include "db_history.h"
+#include "clinical_standards_reference.h"
 #include "nlohmann/json.h"
-using namespace std;
-#pragma comment(lib, "winhttp.lib")\
+
+#pragma comment(lib, "winhttp.lib")
+
 namespace health {
-  inline string load_env_var(const std::string& key_name) {
+// Helper to read key=value from .env files
+inline std::string load_env_var(const std::string& key_name) {
+    // 1. Check system environment
     const char* sys_val = std::getenv(key_name.c_str());
     if (sys_val && std::string(sys_val).length() > 0) {
         return std::string(sys_val);
     }
-    vector<std::string> env_candidates = {
+
+    // 2. Search candidate paths for .env
+    std::vector<std::string> env_candidates = {
         ".env",
         "../.env",
         "backend/.env",
         "../../.env"
     };
-  for (const auto& path : env_candidates) {
-        ifstream f(path);
+
+    for (const auto& path : env_candidates) {
+        std::ifstream f(path);
         if (!f.is_open()) continue;
 
         std::string line;
         while (std::getline(f, line)) {
+            // Trim whitespace
             auto start = line.find_first_not_of(" \t\r\n");
             if (start == std::string::npos || line[start] == '#') continue;
+
             auto eq_pos = line.find('=', start);
             if (eq_pos == std::string::npos) continue;
+
             std::string k = line.substr(start, eq_pos - start);
+            // Trim key
             auto k_end = k.find_last_not_of(" \t");
             if (k_end != std::string::npos) k = k.substr(0, k_end + 1);
+
             if (k == key_name) {
                 std::string v = line.substr(eq_pos + 1);
                 auto v_start = v.find_first_not_of(" \t");
@@ -53,30 +65,37 @@ namespace health {
     }
     return "";
 }
-// Gemini Clinical AI Engine
+
+
+
+// Gemini Clinical AI Engine (Implemented by Vivek Chamoli)
 class GeminiAIEngine {
 private:
-    string api_key_;
-    static wstring to_wide(const std::string& str) {
+    std::string api_key_;
+
+    static std::wstring to_wide(const std::string& str) {
         if (str.empty()) return L"";
         int size_needed = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
-        wstring wstr(size_needed, 0);
+        std::wstring wstr(size_needed, 0);
         MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstr[0], size_needed);
         return wstr;
     }
+
     // Native Windows HTTPS POST for Google Gemini REST API
-    string http_post(const wstring& host, const wstring& path, const string& json_body) {
-        string response_data;
+    std::string http_post(const std::wstring& host, const std::wstring& path, const std::string& json_body) {
+        std::string response_data;
         HINTERNET hSession = WinHttpOpen(L"AI-Health-Center-Vivek/2.0",
                                          WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
                                          WINHTTP_NO_PROXY_NAME,
                                          WINHTTP_NO_PROXY_BYPASS, 0);
         if (!hSession) return "";
+
         HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(), INTERNET_DEFAULT_HTTPS_PORT, 0);
         if (!hConnect) {
             WinHttpCloseHandle(hSession);
             return "";
         }
+
         HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", path.c_str(),
                                                 NULL, WINHTTP_NO_REFERER,
                                                 WINHTTP_DEFAULT_ACCEPT_TYPES,
@@ -86,14 +105,21 @@ private:
             WinHttpCloseHandle(hSession);
             return "";
         }
-        WinHttpSetTimeouts(hRequest, 5000, 5000, 10000, 10000);
-        wstring headers = L"Content-Type: application/json\r\n";
+        // Set HTTPS timeouts (15 seconds)
+        WinHttpSetTimeouts(hRequest, 8000, 8000, 15000, 15000);
+
+        std::wstring headers = L"Content-Type: application/json\r\n";
+        if (!api_key_.empty()) {
+            headers += L"x-goog-api-key: " + to_wide(api_key_) + L"\r\n";
+        }
         BOOL bResults = WinHttpSendRequest(hRequest, headers.c_str(), (DWORD)headers.length(),
                                            (LPVOID)json_body.c_str(), (DWORD)json_body.length(),
                                            (DWORD)json_body.length(), 0);
+
         if (bResults) {
             bResults = WinHttpReceiveResponse(hRequest, NULL);
         }
+
         if (bResults) {
             DWORD dwSize = 0;
             DWORD dwDownloaded = 0;
@@ -101,12 +127,14 @@ private:
                 dwSize = 0;
                 if (!WinHttpQueryDataAvailable(hRequest, &dwSize)) break;
                 if (dwSize == 0) break;
-                vector<char> buffer(dwSize + 1, 0);
+
+                std::vector<char> buffer(dwSize + 1, 0);
                 if (WinHttpReadData(hRequest, &buffer[0], dwSize, &dwDownloaded)) {
                     response_data.append(buffer.data(), dwDownloaded);
                 }
             } while (dwSize > 0);
         }
+
         WinHttpCloseHandle(hRequest);
         WinHttpCloseHandle(hConnect);
         WinHttpCloseHandle(hSession);
@@ -115,13 +143,17 @@ private:
     struct GeminiOverloadedError : public std::runtime_error {
         using std::runtime_error::runtime_error;
     };
-    struct GeminiQuotaExhaustedError : public std::runtime_error {
+struct GeminiQuotaExhaustedError : public std::runtime_error {
         using std::runtime_error::runtime_error;
     };
+
+
     AIResult request_gemini_assessment(const Assessment& req, const std::string& model) {
-        string prompt =
+        std::string prompt =
             "You are an expert AI clinical health diagnostician specialized in early chronic disease detection and community triage for ASHA health workers in India.\n"
-            "Evaluate this patient's assessment data carefully:\n"
+            "You MUST strictly ground your clinical evaluation on the following authoritative ICMR & WHO Non-Communicable Disease (NCD) Reference Guidelines:\n"
+            + get_clinical_reference_prompt_section() + "\n\n"
+            "Evaluate this patient's assessment data carefully against the above clinical benchmarks:\n"
             "- Age: " + std::to_string(req.age) + "\n"
             "- Gender: " + req.gender + "\n"
             "- Patient Reported Symptoms & Duration: " + req.symptoms_text + "\n"
@@ -136,21 +168,26 @@ private:
             "  \"precautions\": [<list of actionable lifestyle and dietary precautions>],\n"
             "  \"immediate_actions\": <concise clinical next action>\n"
             "}";
+
         nlohmann::json request_payload = {
             {"contents", {{{"parts", {{{"text", prompt}}}}}}},
             {"generationConfig", {{"temperature", 0.2}, {"response_mime_type", "application/json"}}}
         };
-        wstring host = L"generativelanguage.googleapis.com";
-        wstring path = L"/v1beta/models/" + to_wide(model) + L":generateContent?key=" + to_wide(api_key_);
-        string raw_resp = http_post(host, path, request_payload.dump());
+
+        std::wstring host = L"generativelanguage.googleapis.com";
+        std::wstring path = L"/v1beta/models/" + to_wide(model) + L":generateContent?key=" + to_wide(api_key_);
+
+        std::string raw_resp = http_post(host, path, request_payload.dump());
         if (raw_resp.empty()) {
             throw GeminiOverloadedError("Gemini API (" + model + ") did not respond. Check network connectivity.");
         }
+
         auto parsed = nlohmann::json::parse(raw_resp);
+
         if (parsed.contains("error")) {
-            string status = parsed["error"].value("status", "");
+            std::string status = parsed["error"].value("status", "");
             int code = parsed["error"].value("code", 0);
-            string msg = "Gemini API (" + model + ") error: " + parsed["error"].dump();
+            std::string msg = "Gemini API (" + model + ") error: " + parsed["error"].dump();
             if (status == "RESOURCE_EXHAUSTED" || code == 429) {
                 throw GeminiQuotaExhaustedError(msg);
             }
@@ -159,14 +196,19 @@ private:
             }
             throw std::runtime_error(msg);
         }
+
         if (!parsed.contains("candidates") || parsed["candidates"].empty()) {
             throw std::runtime_error("Gemini API (" + model + ") returned no candidates.");
         }
+
         auto& cand = parsed["candidates"][0];
         if (!cand.contains("content") || !cand["content"].contains("parts") || cand["content"]["parts"].empty()) {
             throw std::runtime_error("Gemini API (" + model + ") response missing content.");
         }
-        string text_content = cand["content"]["parts"][0]["text"].get<std::string>();
+
+        std::string text_content = cand["content"]["parts"][0]["text"].get<std::string>();
+
+        // Clean any markdown if Gemini added it despite prompt
         if (text_content.find("```json") != std::string::npos) {
             auto p1 = text_content.find("```json");
             text_content = text_content.substr(p1 + 7);
@@ -177,7 +219,9 @@ private:
         if (text_content.rfind("```") != std::string::npos) {
             text_content = text_content.substr(0, text_content.rfind("```"));
         }
+
         auto ai_json = nlohmann::json::parse(text_content);
+
         AIResult res;
         res.risk_score = ai_json.value("risk_score", 45);
         res.risk_level = ai_json.value("risk_level", "Moderate");
@@ -198,9 +242,10 @@ private:
             }
         }
         res.immediate_actions = ai_json.value("immediate_actions", "Consult physician for care assessment.");
-        cout << "[Vivek - AI Module] Successfully parsed live Gemini AI diagnosis (model: " << model << ")! Risk: " << res.risk_score << std::endl;
+        std::cout << "[Vivek - AI Module] Successfully parsed live Gemini AI diagnosis (model: " << model << ")! Risk: " << res.risk_score << std::endl;
         return res;
     }
+
 public:
     GeminiAIEngine(const std::string& explicit_key = "") {
         if (!explicit_key.empty()) {
@@ -209,52 +254,72 @@ public:
             api_key_ = load_env_var("GEMINI_API_KEY");
         }
     }
+
     bool has_api_key() const { return !api_key_.empty() && api_key_.length() > 10; }
+
+    // Primary AI Assessment Method (Google Gemini only — no offline/rule-based fallback).
+    // Tries a sequence of free-tier Gemini models (lightest/highest-quota first),
+    // retrying a model briefly only when it is momentarily overloaded, and moving
+    // straight to the next model when its quota is exhausted or it fails outright.
     AIResult assess_patient(const Assessment& req) {
         if (!has_api_key()) {
             throw std::runtime_error("Gemini API key is not configured. Set GEMINI_API_KEY in .env or config.json.");
         }
+
+        // Current Gemini models (gemini-3.8-flash and gemini-3.5-flash-lite)
         static const std::vector<std::string> models = {
-            "gemini-flash-lite-latest",
-            "gemini-2.5-flash-lite",
-            "gemini-2.5-flash"
+            "gemini-3.8-flash",
+            "gemini-3.5-flash-lite",
+            "gemini-3.8-pro"
         };
         const int max_attempts_per_model = 2;
-        string last_error = "Unknown error.";
+        std::string last_error = "Unknown error.";
+
         for (const auto& model : models) {
             for (int attempt = 1; attempt <= max_attempts_per_model; ++attempt) {
                 try {
-                    cout << "[Vivek - AI Module] Sending assessment request to Google Gemini API (model: "
+                    std::cout << "[Vivek - AI Module] Sending assessment request to Google Gemini API (model: "
                               << model << ", attempt " << attempt << "/" << max_attempts_per_model << ")..." << std::endl;
                     return request_gemini_assessment(req, model);
                 } catch (const GeminiQuotaExhaustedError& e) {
+                    // This model's free-tier quota is used up for the day — retrying
+                    // it will not help. Move straight to the next model.
                     last_error = e.what();
-                    cout<< last_error << std::endl;
+                    std::cout << "[Vivek - AI Module] " << last_error << std::endl;
                     break;
                 } catch (const GeminiOverloadedError& e) {
+                    // Momentary overload — worth a short same-model retry.
                     last_error = e.what();
-                    cout<< last_error << std::endl;
+                    std::cout << "[Vivek - AI Module] " << last_error << std::endl;
                     if (attempt < max_attempts_per_model) {
                         Sleep(800 * attempt);
                     }
                 } catch (const std::exception& e) {
+                    // Any other failure for this specific model (unexpected response
+                    // shape, etc.) — don't let it abort the whole fallback chain.
                     last_error = e.what();
-                    cout << "[Vivek - AI Module] " << last_error << std::endl;
+                    std::cout << "[Vivek - AI Module] " << last_error << std::endl;
                     break;
                 }
             }
-            cout<< model << "' unavailable, trying next free-tier Gemini model..." << std::endl;
+            std::cout << "[Vivek - AI Module] Model '" << model << "' unavailable, trying next free-tier Gemini model..." << std::endl;
         }
+
         throw std::runtime_error("All free-tier Gemini models are currently unavailable. Last error: " + last_error);
     }
 };
-// Route Registration 
+
+
+// Route Registration for Vivek Chamoli's AI Module
 inline void register_ai_assessment_routes(crow::SimpleApp& app, DatabaseManager& db, GeminiAIEngine& ai) {
-    // POST /api/assessments - Start New Assessment
+
+    // POST /api/assessments - Start New Assessment (Implemented by Vivek Chamoli)
     CROW_ROUTE(app, "/api/assessments").methods(crow::HTTPMethod::Post)
     ([&db, &ai](const crow::request& req) {
         crow::response res;
         res.set_header("Content-Type", "application/json");
+
+        // 1. Parse and validate the incoming request payload
         Assessment a;
         try {
             auto body = nlohmann::json::parse(req.body);
@@ -264,12 +329,16 @@ inline void register_ai_assessment_routes(crow::SimpleApp& app, DatabaseManager&
             a.gender = body.value("gender", "Not Specified");
             a.phone = body.value("phone", "+91 98765 00000");
             a.village_area = body.value("village_area", "Community Area");
+
+            // Clinical Vitals & Measurements removed from assessment input
             a.bp_systolic = body.value("bp_systolic", 0);
             a.bp_diastolic = body.value("bp_diastolic", 0);
             a.blood_sugar = body.value("blood_sugar", 0);
             a.heart_rate = body.value("heart_rate", 0);
             a.oxygen_level = body.value("oxygen_level", 0);
             a.temperature = body.value("temperature", 0.0);
+
+            // Clinical Questionnaire Inputs: symptoms & lifestyle habits
             a.symptoms_text = body.value("symptoms_text", "");
             a.medical_history = body.value("medical_history", "");
         } catch (const std::exception& e) {
@@ -277,6 +346,10 @@ inline void register_ai_assessment_routes(crow::SimpleApp& app, DatabaseManager&
             res.body = nlohmann::json({{"error", std::string("Invalid request payload: ") + e.what()}}).dump();
             return res;
         }
+
+        // 2. Run the AI Assessment — Google Gemini only, no offline fallback.
+        //    Any failure (missing key, network error, bad response) is reported
+        //    to the caller instead of silently substituting a different result.
         AIResult result;
         try {
             result = ai.assess_patient(a);
@@ -289,6 +362,7 @@ inline void register_ai_assessment_routes(crow::SimpleApp& app, DatabaseManager&
             }).dump();
             return res;
         }
+
         a.risk_score = result.risk_score;
         a.risk_level = result.risk_level;
         a.possible_chronic_diseases = result.possible_chronic_diseases;
@@ -296,7 +370,13 @@ inline void register_ai_assessment_routes(crow::SimpleApp& app, DatabaseManager&
         a.other_symptoms_to_watch = result.other_symptoms_to_watch;
         a.precautions = result.precautions;
         a.immediate_actions = result.immediate_actions;
+
+        // alert_sent stays false regardless of risk level — the ASHA worker
+        // must explicitly press "Send Alert" on the dashboard to dispatch one
+        // (see auth_notification.h: POST /api/worker/assessments/<id>/alert).
+
         db.save_assessment(a);
+
         res.code = 201;
         res.body = nlohmann::json({
             {"success", true},
@@ -307,4 +387,5 @@ inline void register_ai_assessment_routes(crow::SimpleApp& app, DatabaseManager&
         return res;
     });
 }
-}
+
+} // namespace health
