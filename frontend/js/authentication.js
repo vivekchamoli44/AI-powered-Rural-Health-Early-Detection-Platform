@@ -1,19 +1,13 @@
 let currentRole = 'patient';
 let isRegisterMode = false;
-
-
 function dashboardPageFor(role) {
     return role === 'asha_worker' ? 'worker.html' : 'patient.html';
 }
-
-
 document.addEventListener('DOMContentLoaded', function () {
     const path = window.location.pathname;
     const isPatientPage = path.endsWith('patient.html');
     const isWorkerPage = path.endsWith('worker.html');
     const user = getCurrentUser();
-
-    
     if (isPatientPage || isWorkerPage) {
         if (!user) {
             window.location.href = 'index.html';
@@ -29,22 +23,23 @@ document.addEventListener('DOMContentLoaded', function () {
         if (isPatientPage && window.DbHistoryModule) {
             window.DbHistoryModule.loadHistory(user.id);
         }
+        if (isPatientPage && window.LabBookingModule) {
+            window.LabBookingModule.loadPatientBookings(user.id);
+        }
         if (isWorkerPage && window.DashboardTriageModule) {
             window.DashboardTriageModule.loadTriage();
         }
+        if (isWorkerPage && window.LabBookingModule) {
+            window.LabBookingModule.loadWorkerPhlebotomyQueue();
+        }
     } else if (user && user.role) {
-        
         window.location.href = dashboardPageFor(user.role);
         return;
     }
-
-    
     const tabPatient = document.getElementById('tab-patient');
     const tabWorker = document.getElementById('tab-worker');
     const toggleLink = document.getElementById('toggle-auth-btn');
     const authForm = document.getElementById('auth-form');
-
-    
     if (tabPatient) {
         tabPatient.addEventListener('click', function () {
             currentRole = 'patient';
@@ -53,8 +48,6 @@ document.addEventListener('DOMContentLoaded', function () {
             if (authForm) authForm.reset();
         });
     }
-
-    
     if (tabWorker) {
         tabWorker.addEventListener('click', function () {
             currentRole = 'asha_worker';
@@ -63,33 +56,24 @@ document.addEventListener('DOMContentLoaded', function () {
             if (authForm) authForm.reset();
         });
     }
-
-    
     if (toggleLink) {
         toggleLink.addEventListener('click', function (e) {
             e.preventDefault();
             isRegisterMode = !isRegisterMode;
             if (authForm) authForm.reset();
-
-            
             const regFields = document.querySelectorAll('.reg-field');
             regFields.forEach(function (field) {
                 field.style.display = isRegisterMode ? 'block' : 'none';
-            });
-
+            })
             document.getElementById('auth-title').textContent = isRegisterMode ? 'Create New Account' : 'Sign In';
             document.getElementById('auth-submit').textContent = isRegisterMode ? 'Sign Up' : 'Sign In';
             toggleLink.textContent = isRegisterMode ? 'Already have an account? Sign In' : 'New user? Sign Up';
         });
     }
-
-    
     if (authForm) {
         authForm.reset();
         authForm.addEventListener('submit', handleAuthSubmit);
     }
-
-    
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', function () {
@@ -99,7 +83,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 });
-
 async function handleAuthSubmit(e) {
     e.preventDefault();
     const submitBtn = document.getElementById('auth-submit');
@@ -115,11 +98,9 @@ async function handleAuthSubmit(e) {
         submitBtn.textContent = isRegisterMode ? 'Sign Up' : 'Sign In';
         return;
     }
-
     try {
         if (isRegisterMode) {
-            
-            const payload = {
+             const payload = {
                 email: email,
                 username: email,
                 password: password,
@@ -145,7 +126,7 @@ async function handleAuthSubmit(e) {
             openDashboard(data.user.role);
 
         } else {
-            
+            // Login payload
             const payload = {
                 email: email,
                 username: email,
@@ -173,12 +154,14 @@ async function handleAuthSubmit(e) {
         submitBtn.textContent = isRegisterMode ? 'Sign Up' : 'Sign In';
     }
 }
+
+// 3. Save User Session to Browser LocalStorage
 function saveSession(token, user) {
     localStorage.setItem('auth_token', token);
     localStorage.setItem('auth_user', JSON.stringify(user));
 }
 
-
+// 4. Get Current User Object
 function getCurrentUser() {
     try {
         return JSON.parse(localStorage.getItem('auth_user')) || null;
@@ -187,15 +170,13 @@ function getCurrentUser() {
     }
 }
 
-
+// Headers for API calls that need the logged-in session (ASHA worker routes)
 function authHeaders() {
     return {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '')
     };
 }
-
-
 function handleSessionExpired(response) {
     if (response.status !== 401) return false;
     localStorage.removeItem('auth_user');
@@ -205,12 +186,12 @@ function handleSessionExpired(response) {
     return true;
 }
 
-
+// 5. Navigate to the dashboard page that matches this role
 function openDashboard(role) {
     window.location.href = dashboardPageFor(role);
 }
 
-
+// Populate the nav bar's user pill on patient.html / worker.html
 function setupNavUser(user) {
     const navInfo = document.getElementById('nav-user-info');
     if (navInfo) navInfo.style.display = 'flex';
@@ -218,18 +199,53 @@ function setupNavUser(user) {
     const nameEl = document.getElementById('nav-user-name');
     if (nameEl && user) {
         let displayName = user.full_name || '';
-       
+        // If full_name is missing or contains an email address, extract clean name
         if (!displayName || displayName.includes('@')) {
             let raw = (displayName || user.email || user.username || 'User').split('@')[0];
             displayName = raw.replace(/[._-]+/g, ' ').replace(/\b\w/g, function (c) {
                 return c.toUpperCase();
             });
         }
+        if (user.role === 'patient' && user.id) {
+            displayName += ' (ID: #' + user.id + ')';
+        }
         nameEl.textContent = displayName;
+    }
+
+    // Populate Patient Dashboard top hero banner with Name and Patient ID
+    const welcomeEl = document.getElementById('patient-welcome-heading');
+    const badgeEl = document.getElementById('patient-id-badge');
+    const subDetailsEl = document.getElementById('patient-sub-details');
+
+    if (user && user.role === 'patient') {
+        let cleanName = user.full_name || '';
+        if (!cleanName || cleanName.includes('@')) {
+            let raw = (cleanName || user.email || user.username || 'Patient').split('@')[0];
+            cleanName = raw.replace(/[._-]+/g, ' ').replace(/\b\w/g, function (c) {
+                return c.toUpperCase();
+            });
+        }
+        if (welcomeEl) {
+            welcomeEl.textContent = cleanName ? ('Welcome, ' + cleanName) : 'Patient Health Dashboard';
+        }
+        if (badgeEl) {
+            badgeEl.textContent = 'Patient ID: #' + (user.id || 2);
+            badgeEl.style.display = 'inline-block';
+        }
+        if (subDetailsEl) {
+            let details = [];
+            if (user.age) details.push('Age: ' + user.age);
+            if (user.gender) details.push(user.gender);
+            if (user.village_area) details.push('Area: ' + user.village_area);
+            if (user.phone) details.push('Phone: ' + user.phone);
+            if (details.length > 0) {
+                subDetailsEl.textContent = details.join(' | ');
+            }
+        }
     }
 }
 
-
+// 7. Simple Toast Notification
 function showToast(message, type) {
     const toast = document.createElement('div');
     toast.style.position = 'fixed';
@@ -250,7 +266,7 @@ function showToast(message, type) {
     }, 3000);
 }
 
-
+// 8. ASHA Worker Action: Send Emergency Alert
 async function sendNotification(assessmentId, patientName, btnElement) {
     if (!confirm('Send emergency alert to ' + patientName + '?')) {
         return;
@@ -284,7 +300,7 @@ async function sendNotification(assessmentId, patientName, btnElement) {
     }
 }
 
-
+// Export module functions
 window.AuthNotificationModule = {
     notify: showToast,
     sendNotification: sendNotification,
