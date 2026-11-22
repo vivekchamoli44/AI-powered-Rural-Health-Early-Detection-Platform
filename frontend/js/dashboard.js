@@ -1,19 +1,8 @@
-
-
 let allPatients = [];
 let activePatient = null;
-
 document.addEventListener('DOMContentLoaded', function () {
-    const searchInput = document.getElementById('triage-search');
-    const filterSelect = document.getElementById('triage-filter');
     const closeContactBtn = document.getElementById('close-contact-modal');
 
-    if (searchInput) {
-        searchInput.addEventListener('input', applyFilter);
-    }
-    if (filterSelect) {
-        filterSelect.addEventListener('change', applyFilter);
-    }
     if (closeContactBtn) {
         closeContactBtn.addEventListener('click', function () {
             document.getElementById('contact-modal').classList.remove('active');
@@ -23,9 +12,7 @@ document.addEventListener('DOMContentLoaded', function () {
 async function loadTriage() {
     const tbody = document.getElementById('triage-tbody');
     if (!tbody) return;
-
     tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: var(--text-muted);">Loading patient records...</td></tr>';
-
     try {
         const auth = window.AuthNotificationModule;
         const response = await fetch('/api/worker/assessments', { headers: auth.authHeaders() });
@@ -40,6 +27,8 @@ async function loadTriage() {
                 ? 'Showing patients from your area: ' + data.village_area
                 : 'No area is set on your account, so no patients can be shown.';
         }
+
+        // Update KPI metrics
         const elTotal = document.getElementById('kpi-total');
         const elCrit = document.getElementById('kpi-critical');
         const elHigh = document.getElementById('kpi-high');
@@ -52,17 +41,23 @@ async function loadTriage() {
 
         renderTriageTable(allPatients);
 
+        // Build O(1) Hash Search Index for fast patient searching
+        if (window.PatientHashSearchModule) {
+            window.PatientHashSearchModule.buildIndex(allPatients);
+        }
+
     } catch (err) {
         tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #ef4444; padding: 20px;">Error loading patients: ' + err.message + '</td></tr>';
     }
 }
 
+// 2. Render Rows in Triage Table
 function renderTriageTable(patients) {
     const tbody = document.getElementById('triage-tbody');
     if (!tbody) return;
 
     if (patients.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: var(--text-muted);">No matching patients found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: var(--text-muted);">No patients found.</td></tr>';
         return;
     }
 
@@ -72,6 +67,8 @@ function renderTriageTable(patients) {
         if (item.risk_level === 'Critical') badgeClass = 'badge-critical';
         else if (item.risk_level === 'High') badgeClass = 'badge-high';
         else if (item.risk_level === 'Moderate') badgeClass = 'badge-moderate';
+
+        // Format concise symptoms without large text block
         const symptomsArr = (item.symptoms_text || '')
             .split(',')
             .map(function (s) { return s.trim(); })
@@ -90,8 +87,11 @@ function renderTriageTable(patients) {
                 <span class="badge ${badgeClass}" style="margin-left: 6px;">${item.risk_level}</span>
             </td>
             <td>
-                <strong>${item.patient_name}</strong>
-                <div style="font-size: 12px; color: var(--text-muted);">Age: ${item.age} | ${item.gender} | ${item.village_area}</div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <strong>${item.patient_name}</strong>
+                    <span style="font-size: 11px; background: #e0f2fe; color: #0369a1; padding: 2px 7px; border-radius: 6px; font-weight: 700; border: 1px solid #bae6fd;">ID: #${item.patient_id || item.id}</span>
+                </div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Age: ${item.age} | ${item.gender} | ${item.village_area}</div>
             </td>
             <td>
                 <div style="max-width: 210px;" title="${fullSymptomsSafe}">
@@ -119,6 +119,8 @@ function renderTriageTable(patients) {
                 </div>
             </td>
         `;
+
+        // Alert button handler
         const alertBtn = tr.querySelector('.action-alert-btn');
         if (alertBtn && !item.alert_sent) {
             alertBtn.addEventListener('click', function () {
@@ -127,9 +129,13 @@ function renderTriageTable(patients) {
                 }
             });
         }
+
+        // Contact button handler
         tr.querySelector('.action-contact-btn').addEventListener('click', function () {
             openContact(item);
         });
+
+        // Report button handler
         tr.querySelector('.action-view-btn').addEventListener('click', function () {
             if (window.AiAssessmentModule) {
                 window.AiAssessmentModule.renderReport(item, true);
@@ -139,34 +145,29 @@ function renderTriageTable(patients) {
         tbody.appendChild(tr);
     });
 }
-function applyFilter() {
-    const query = (document.getElementById('triage-search')?.value || '').toLowerCase();
-    const filter = (document.getElementById('triage-filter')?.value || 'ALL').toUpperCase();
 
-    const filtered = allPatients.filter(function (p) {
-        const matchesQuery = (p.patient_name || '').toLowerCase().includes(query) ||
-                             (p.village_area || '').toLowerCase().includes(query);
-        const matchesLevel = (filter === 'ALL') || (p.risk_level.toUpperCase() === filter);
-        return matchesQuery && matchesLevel;
-    });
-
-    renderTriageTable(filtered);
-}
+// 3. Open Patient Contact Modal (Shows only Name, Contact No, and Location)
 function openContact(item) {
     activePatient = item;
     const modal = document.getElementById('contact-modal');
     if (!modal) return;
 
     const nameEl = document.getElementById('modal-patient-name');
+    const idEl = document.getElementById('modal-patient-id');
     const phoneEl = document.getElementById('modal-patient-phone');
     const areaEl = document.getElementById('modal-patient-area');
 
     if (nameEl) nameEl.textContent = item.patient_name || '--';
+    if (idEl) idEl.textContent = '#' + (item.patient_id || item.id);
     if (phoneEl) phoneEl.textContent = item.phone || '--';
     if (areaEl) areaEl.textContent = item.village_area || '--';
 
     modal.classList.add('active');
 }
+
+// Export module functions
 window.DashboardTriageModule = {
-    loadTriage: loadTriage
+    loadTriage: loadTriage,
+    render: renderTriageTable,
+    getAllPatients: function () { return allPatients; }
 };
