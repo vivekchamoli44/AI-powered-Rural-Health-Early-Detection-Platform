@@ -1,20 +1,15 @@
-
 let alertsPollingTimer = null;
-
 async function loadHistory(patientId, isSilent) {
     const container = document.getElementById('history-timeline-box');
     if (!container) return;
-
     if (!isSilent) {
         container.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 15px;">Loading past assessments...</p>';
     }
-
     try {
         const id = patientId || 2;
         const response = await fetch('/api/assessments/my?patient_id=' + id);
         const data = await response.json();
         const list = data.assessments || [];
-
         // Auto-poll in background every 8 seconds for real-time ASHA alerts
         // (patient.html is a dedicated page now, so no visibility check is needed)
         if (!alertsPollingTimer) {
@@ -22,16 +17,13 @@ async function loadHistory(patientId, isSilent) {
                 loadHistory(id, true);
             }, 8000);
         }
-
         if (list.length === 0) {
             container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted); background: #f8fafc; border-radius: 8px; border: 1px dashed var(--border);"><p>No previous assessments found. Click <strong>Start New Assessment</strong> above.</p></div>';
             renderAlertsSidebar([]);
             return;
         }
-
         // Render ASHA worker alerts in the patient sidebar
         renderAlertsSidebar(list);
-
         container.innerHTML = '';
         list.forEach(function (item) {
             let badgeClass = 'badge-low';
@@ -48,8 +40,9 @@ async function loadHistory(patientId, isSilent) {
 
             card.innerHTML = `
                 <div>
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
                         <strong>Assessment #${item.id}</strong>
+                        <span style="font-size: 11px; background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px; font-weight: 700; border: 1px solid #bae6fd;">Patient ID: #${item.patient_id}</span>
                         <span class="badge ${badgeClass}">${item.risk_level} (${item.risk_score}/100)</span>
                         ${item.alert_sent ? '<span class="alert-flag">🚨 Alert Dispatched</span>' : ''}
                     </div>
@@ -78,6 +71,7 @@ async function loadHistory(patientId, isSilent) {
         container.innerHTML = '<p style="color: #ef4444; padding: 10px;">Failed to load history: ' + err.message + '</p>';
     }
 }
+
 // 2. Render ASHA Worker Alerts in Patient Dashboard Sidebar
 function renderAlertsSidebar(list) {
     const alertsContainer = document.getElementById('patient-alerts-list');
@@ -113,10 +107,8 @@ function renderAlertsSidebar(list) {
     alerts.forEach(function (item) {
         const alertCard = document.createElement('div');
         alertCard.className = 'alert-item-card';
-
         const alertTime = item.alert_sent_at || item.created_at || 'Recently';
         const alertMsg = item.alert_message || 'HIGH RISK ALERT: ASHA Healthcare Worker has flagged critical risk for this patient.';
-
         alertCard.innerHTML = `
             <div class="alert-item-header">
                 <span>🚨 ASHA DISPATCHED</span>
@@ -133,7 +125,6 @@ function renderAlertsSidebar(list) {
                 <button type="button" class="btn btn-danger btn-sm view-alert-report-btn" style="padding: 3px 8px; font-size: 11px;">View Report</button>
             </div>
         `;
-
         alertCard.querySelector('.view-alert-report-btn').addEventListener('click', function () {
             if (window.AiAssessmentModule) {
                 window.AiAssessmentModule.renderReport(item, true);
