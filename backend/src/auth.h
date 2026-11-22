@@ -1,58 +1,101 @@
 #include <string>
-#include<unoredered_map>
-#include<mutex>
-#include<random>
-#include<iostream>
+#include <unordered_map>
+#include <mutex>
+#include <random>
+#include <cctype>
+#include <iostream>
 #include "crow_all.h"
 #include "models.h"
 #include "db_history.h"
 #include "nlohmann/json.h"
+
 namespace health {
-class AuthSessionManager {
-private :
-std ::unordered_map<std::string,User>
-sessions_;
-std::string generate_token() {
-  static const char alphanum[] = "012345678910ABCDEFGHIJKLMNOPQRSTUYWXYZabcdefghijklmnopqrsuvwxyz";
-std ::random_device rd ;
-std ::mt19937 gen(rd());
-std ::uniform_int_intdistribution<>
-dis(0, sizeof(alphanum)-2);
-std :: string s = "sess_"
-for (int i = 0; i<32;i++) s +=
-  alphanum[dis(gen)];
-return s;
-}
-public :
-std ::lock_guard<std::mutex>
-lock(auth_mutex_);
-std::string token = generate_token();
-sessions_[token] = user ;
-return token ;
-}
-bool get_user(const std ::string& token , user& out_user){
-  if (token.empty()) return false ;
-std ::lock_guard<std::mutex>
-lock(auth_mutex_);
-auto it = sessions_.find(token);
-if (it = sessions_.end()){
-  out_user = it->econd;
-  return true ;
-  
-}
-return false ;
-}
-void destroy_session(const std ::string&token) {
-std :: lock_guard<std::mutex>
-lock(auth_mutex_);
-sessions_.erase(token);
-}
+class AuthSessionManager{
+private:
+    std::unordered_map<std::string, User> sessions_;
+    std::mutex auth_mutex_;
+
+    std::string generate_token() {
+        static const char alphanum[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<> dis(0, sizeof(alphanum) - 2);
+
+        std::string s = "sess_";
+        for (int i = 0; i < 32; ++i) s += alphanum[dis(gen)];
+        return s;
+    }
+
+public:
+    std::string create_session(const User& user) {
+        std::lock_guard<std::mutex> lock(auth_mutex_);
+        std::string token = generate_token();
+        sessions_[token] = user;
+        return token;
+    }
+
+    bool get_user(const std::string& token, User& out_user) {
+        if (token.empty()) return false;
+        std::lock_guard<std::mutex> lock(auth_mutex_);
+        auto it = sessions_.find(token);
+        if (it != sessions_.end()) {
+            out_user = it->second;
+            return true;
+        }
+        return false;
+    }
+    void destroy_session(const std::string& token) {
+        std::lock_guard<std::mutex> lock(auth_mutex_);
+        sessions_.erase(token);
+    }
 };
-// Route registration for Yashwardhan 
-inline void register_auth_notification _routes(crow::SimpleApp& app, DatabaseManager &
-CROW_ROUTE(app, "/api/auth/register").methods(crow::HTTPMethod::Post)
-([&db , &auth](const crow::request& req) {
- crow::response res;
+
+// Village/area names are free text typed at sign-up, so compare them
+// ignoring case and extra whitespace ("Rampur Ward 4" == " rampur  ward 4").
+inline std::string normalize_area(const std::string& area) {
+    std::string out;
+    bool pending_space = false;
+    for (unsigned char c : area) {
+        if (std::isspace(c)) { pending_space = !out.empty(); continue; }
+        if (pending_space) { out += ' '; pending_space = false; }
+        out += (char)std::tolower(c);
+    }
+    return out;
+}
+
+// True if a patient record in `area` belongs to this ASHA worker's area.
+// A worker with no area on their account matches nobody.
+inline bool in_worker_area(const User& worker, const std::string& area) {
+    std::string worker_area = normalize_area(worker.village_area);
+    return !worker_area.empty() && worker_area == normalize_area(area);
+}
+
+// Resolves the request's Bearer token to a logged-in ASHA worker.
+// On failure, fills `res` with a 401/403 error and returns false.
+inline bool require_asha_worker(const crow::request& req, AuthSessionManager& auth, User& out_user, crow::response& res) {
+    std::string token = req.get_header_value("Authorization");
+    if (token.rfind("Bearer ", 0) == 0) token = token.substr(7);
+
+    if (!auth.get_user(token, out_user)) {
+        res.code = 401;
+        res.body = nlohmann::json({{"error", "Not authenticated. Please log in again."}}).dump();
+        return false;
+    }
+    if (out_user.role != "asha_worker") {
+        res.code = 403;
+        res.body = nlohmann::json({{"error", "Only ASHA workers can access this resource."}}).dump();
+        return false;
+    }
+    return true;
+}
+
+// Route registration for Yashwardhan Rohilla's module
+inline void register_auth_notification_routes(crow::SimpleApp& app, DatabaseManager& db, AuthSessionManager& auth) {
+
+    // POST /api/auth/register - Sign Up (Implemented by Yashwardhan Rohilla)
+    CROW_ROUTE(app, "/api/auth/register").methods(crow::HTTPMethod::Post)
+    ([&db, &auth](const crow::request& req) {
+        crow::response res;
         res.set_header("Content-Type", "application/json");
 
         try {
@@ -118,8 +161,8 @@ CROW_ROUTE(app, "/api/auth/register").methods(crow::HTTPMethod::Post)
         }
     });
 
-// gmail authentication completed
- CROW_ROUTE(app, "/api/auth/login").methods(crow::HTTPMethod::Post)
+    // POST /api/auth/login - Login (Implemented by Yashwardhan Rohilla)
+    CROW_ROUTE(app, "/api/auth/login").methods(crow::HTTPMethod::Post)
     ([&db, &auth](const crow::request& req) {
         crow::response res;
         res.set_header("Content-Type", "application/json");
@@ -146,7 +189,7 @@ CROW_ROUTE(app, "/api/auth/register").methods(crow::HTTPMethod::Post)
 
             std::string token = auth.create_session(u);
 
-         
+            // OOP demo: same Person hierarchy, dispatched polymorphically by role.
             auto person = make_person(u);
             std::cout << "[Auth Module] Login: " << person->full_name()
                       << " -> " << person->role_description() << std::endl;
@@ -186,7 +229,8 @@ CROW_ROUTE(app, "/api/auth/register").methods(crow::HTTPMethod::Post)
         res.body = nlohmann::json({{"authenticated", true}, {"user", u.to_json()}}).dump();
         return res;
     });
- // POST /api/auth/logout
+
+    // POST /api/auth/logout
     CROW_ROUTE(app, "/api/auth/logout").methods(crow::HTTPMethod::Post)
     ([&auth](const crow::request& req) {
         crow::response res;
@@ -198,10 +242,27 @@ CROW_ROUTE(app, "/api/auth/register").methods(crow::HTTPMethod::Post)
         res.body = nlohmann::json({{"success", true}}).dump();
         return res;
     });
-   CROW_ROUTE(app, "/api/worker/assessments/<int>/alert").methods(crow::HTTPMethod::Post)
-    ([&db](const crow::request& req, int assessment_id) {
+
+    // POST /api/worker/assessments/<int>/alert - ASHA Worker Module: Send Notification (Implemented by Yashwardhan Rohilla)
+    CROW_ROUTE(app, "/api/worker/assessments/<int>/alert").methods(crow::HTTPMethod::Post)
+    ([&db, &auth](const crow::request& req, int assessment_id) {
         crow::response res;
         res.set_header("Content-Type", "application/json");
+
+        User worker;
+        if (!require_asha_worker(req, auth, worker, res)) return res;
+
+        std::string patient_area;
+        if (!db.get_assessment_area(assessment_id, patient_area)) {
+            res.code = 404;
+            res.body = nlohmann::json({{"error", "Assessment record not found."}}).dump();
+            return res;
+        }
+        if (!in_worker_area(worker, patient_area)) {
+            res.code = 403;
+            res.body = nlohmann::json({{"error", "This patient is outside your assigned area."}}).dump();
+            return res;
+        }
 
         std::string custom_message = "";
         try {
@@ -233,8 +294,7 @@ CROW_ROUTE(app, "/api/auth/register").methods(crow::HTTPMethod::Post)
     });
 }
 
-}
-// asha worker send notification module completed
+} // namespace health
 
 
    
