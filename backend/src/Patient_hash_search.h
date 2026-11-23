@@ -1,20 +1,4 @@
 #pragma once
-/**
- * ============================================================================
- * Module: ASHA Worker Patient Search via Hashing (DSA Implementation)
- * ============================================================================
- * Description:
- *  - Implements a custom Hash Table with Separate Chaining collision resolution
- *    for O(1) average-time patient searching in the ASHA Worker Dashboard.
- *  - Supports searching by:
- *      1. Patient Full Name & Name Tokens (e.g. "Ramesh", "Kumar")
- *      2. Contact Phone Number (e.g. "9123456789", "+91 91234 56789")
- *      3. Patient ID (e.g. "2")
- *      4. Assessment Record ID
- *  - Scoped strictly to the authenticated ASHA Worker's assigned village area.
- * ============================================================================
- */
-
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -26,9 +10,7 @@
 #include "auth_notification.h"
 #include "dashboard_triage.h"
 #include "nlohmann/json.h"
-
 namespace health {
-
 inline std::string normalize_hash_key(const std::string& input) {
     std::string clean = "";
     for (char c : input) {
@@ -38,7 +20,6 @@ inline std::string normalize_hash_key(const std::string& input) {
     }
     return clean;
 }
-
 class PatientHashTable {
 private:
     struct HashNode {
@@ -50,12 +31,9 @@ private:
             records.push_back(a);
         }
     };
-
     static const int TABLE_SIZE = 101;
     std::vector<HashNode*> buckets_;
     int total_entries_ = 0;
-
-    // hash(s) = sum(s[i] * p^i) % TABLE_SIZE, with prime base p = 31
     int hash_function(const std::string& key) const {
         if (key.empty()) return 0;
         const int p = 31;
